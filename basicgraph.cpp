@@ -86,6 +86,19 @@ graph::iterator& graph::iterator::operator >>(token_type tt) {
     return *this;
 }
 
+graph::iterator& graph::iterator::operator ()()
+{
+    if (!e || e->type != token_type::exact_match)
+        throw std::logic_error("() applicable only to edges matching a exact string");
+    for(auto k = g.all_tokens.cbegin(); k != g.all_tokens.cend(); ++k) {
+        if (k->second != e->check_token)
+            continue;
+        e->callback_id = k->first;
+        e->callback = g.getEdgeCallback(e->callback_id);
+        return *this;
+    }
+    throw std::logic_error("invalid edge state detected");
+}
 graph::iterator& graph::iterator::operator ()(const std::string& cb)
 {
     if (e)

@@ -98,6 +98,7 @@ public:
         iterator& operator >>(const std::string& token);
         iterator& operator >>(const char * token);
         iterator& operator >>(token_type tt);
+        iterator& operator()();
         iterator& operator()(const std::string& callback);
     private:
         friend class graph;
