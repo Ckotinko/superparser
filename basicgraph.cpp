@@ -61,6 +61,7 @@ graph::iterator& graph::iterator::operator >>(const std::string& token) {
     e = &vd.edges.back();
     e->type = token_type::exact_match;
     e->check_token = tid;
+    e->callback_id = token;
     v = invalid_id;
     return *this;
 }
@@ -85,19 +86,48 @@ graph::iterator& graph::iterator::operator >>(token_type tt) {
     v = invalid_id;
     return *this;
 }
+graph::iterator& graph::iterator::operator >>(const filter& f) {
+    if(f.type == token_type::exact_match)
+        throw std::logic_error("cannot match unknown token");
 
-graph::iterator& graph::iterator::operator ()()
-{
-    if (!e || e->type != token_type::exact_match)
-        throw std::logic_error("() applicable only to edges matching a exact string");
-    for(auto k = g.all_tokens.cbegin(); k != g.all_tokens.cend(); ++k) {
-        if (k->second != e->check_token)
+    completeEdge();
+    graph::vertex_data& vd = g.all_vertices.at(v);
+    for(auto i = vd.edges.begin(); i != vd.edges.end(); ++i) {
+        if (i->type != f.type)
             continue;
-        e->callback_id = k->first;
-        e->callback = g.getEdgeCallback(e->callback_id);
+        if (i->callback_id != f.callback_id)
+            continue;
+
+        e = &(*i);
+        v = e->target_vertex;
         return *this;
     }
-    throw std::logic_error("invalid edge state detected");
+    vd.edges.emplace_back();
+    e = &vd.edges.back();
+    e->type = f.type;
+    e->callback_id = f.callback_id;
+    v = invalid_id;
+    return *this;
+}
+void graph::iterator::operator >>(const graph::iterator& to) {
+    assert(g.equal(to.g));
+    if (to.v == invalid_id || to.e) {
+        throw std::logic_error("destination iterator is not a valid target");
+    }
+    if (e && e->target_vertex == invalid_id) {
+        e->target_vertex = to.v;
+        e = nullptr;
+        v = to.v;
+    } else if (!e && v != invalid_id) {
+        g.all_vertices.at(v).defaultto = to.v;
+    } else
+        throw std::logic_error("cannot build a edge between two vertices");
+}
+graph::iterator::call graph::iterator::operator ()()
+{
+    if (e || v == invalid_id)
+        throw std::logic_error("() applicable only vertices");
+    return call{v};
 }
 graph::iterator& graph::iterator::operator ()(const std::string& cb)
 {
@@ -106,6 +136,10 @@ graph::iterator& graph::iterator::operator ()(const std::string& cb)
     else
         g.all_vertices.at(v).callback_id = cb;
     return *this;
+}
+void graph::iterator::end() {
+    completeEdge();
+    g.all_vertices.at(v).terminal = true;
 }
 
 void graph::verify()
@@ -121,6 +155,8 @@ void graph::verify()
             vd.callback = getCallback(vd.callback_id);
 
         if (vd.callin != invalid_id && vd.callin >= maxv)
+            goto invalid_archive;
+        if (vd.defaultto != invalid_id && vd.defaultto >= maxv)
             goto invalid_archive;
         for(auto j = vd.edges.begin(); j != vd.edges.end(); ++j) {
             edge_data& ed = *j;
@@ -148,4 +184,75 @@ void graph::verify()
 
     invalid_archive:
     throw std::runtime_error("archive contents are not valid");
+}
+static std::string htmlify(const std::string& text) {
+    std::string copy;
+    unsigned n = 0, e = text.size();
+    do {
+        auto x = text.find_first_of("<>& \t\"", n);
+        if (x == std::string::npos) {
+            copy.append(text, n, x);
+            break;
+        }
+        if (x > n)
+            copy.append(text, n, x-n);
+        switch(text[x]) {
+        case '<':
+            copy.append("&lt;"); break;
+        case '>':
+            copy.append("&gt;"); break;
+        case '&':
+            copy.append("&amp;"); break;
+        case ' ':
+            copy.append("&nbsp;"); break;
+        case '\t':
+            copy.append("&nsbp;&nsbp;&nsbp;&nsbp;"); break;
+        case '\"':
+            copy.append("&quot;"); break;
+        default:
+            copy.append(1,'?');
+        }
+        n = x+1;
+    } while (n < e);
+    return copy;
+}
+void graph::dump(std::ostream &os)
+{
+    std::unordered_map<unsigned, std::string> rmap;
+    for(auto i = all_tokens.cbegin(); i != all_tokens.cend(); ++i)
+        rmap[i->second] = i->first;
+
+    os<<R"(((
+<html>
+<head>
+   <meta encoding=\"UTF-8\">
+   <style>
+   h3 { display: block; }
+   .wide { width: 100%; }
+   .call { background-color: #fdf; }
+   .root { background-color: #dff; }
+   .return { background-color: #f33; }
+   </style>
+   <script>
+   function hs(id) {
+      let e = document.getElementById(id);
+      if (e.style.display == "none")
+        e.style.display = "block";
+      else
+        e.style.display = "none";
+   }
+   </script>
+</head>
+<body>)))";
+    int icnt = 0;
+    for(auto i = root_vertices.cbegin(); i != root_vertices.cend(); ++i, ++icnt) {
+        os<<"<div class='wide'><h3 onclick=\"hs('blk)))"<<icnt<<"';\">"
+          <<htmlify(i->first)<<"</h3>";
+        os<<"<div style='display:none;' id='blk"<<icnt<<"'>";
+
+
+
+        os<<"</div></div>";
+    }
+    os<<"</body></html>";
 }

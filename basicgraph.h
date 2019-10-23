@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <vector>
 #include <cstdint>
+#include <ostream>
 #include <boost/serialization/split_member.hpp>
 #include "function.h"
 
@@ -68,6 +69,7 @@ private:
         void save(Archive & ar, const unsigned int version)
         {
             ar & callin;
+            ar & invalid_id;
             ar & terminal;
             ar & edges;
             ar & callback_id;
@@ -76,6 +78,7 @@ private:
         void load(Archive & ar, const unsigned int version)
         {
             ar & callin;
+            ar & invalid_id;
             ar & terminal;
             ar & edges;
             ar & callback_id;
@@ -83,6 +86,7 @@ private:
         }
         BOOST_SERIALIZATION_SPLIT_MEMBER()
         unsigned    callin          = invalid_id;
+        unsigned    defaultto       = invalid_id;
         bool        terminal        = false;
         std::list<edge_data> edges;
         std::string callback_id;
@@ -93,12 +97,26 @@ public:
     virtual callback_t getCallback(const std::string& name) = 0;
     virtual edge_check_t getEdgeCallback(const std::string& name) = 0;
 
+    struct filter {
+        filter(token_type tt, const std::string& id)
+            : type(tt), callback_id(id) {}
+        filter(token_type tt, const char* id)
+            : type(tt), callback_id(id) {}
+        token_type   type;
+        std::string callback_id;
+    };
     class iterator {
     public:
+        struct call { unsigned v; };
+        void      end();
+        iterator  operator *() const {return iterator(*this);}
         iterator& operator >>(const std::string& token);
         iterator& operator >>(const char * token);
         iterator& operator >>(token_type tt);
-        iterator& operator()();
+        iterator& operator >>(const filter& filter);
+        iterator& operator >>(const call& callv);
+        void      operator >>(const iterator& to);
+        call      operator()();
         iterator& operator()(const std::string& callback);
     private:
         friend class graph;
@@ -129,7 +147,12 @@ public:
     BOOST_SERIALIZATION_SPLIT_MEMBER()
     iterator at(const std::string& id);
     iterator at(const char * id);
+
+    void dump(std::ostream& os);
 private:
+    bool equal(const graph& g) const {
+        return this == &g;
+    }
     std::unordered_map<std::string,unsigned> root_vertices;
     std::unordered_map<std::string,unsigned> all_tokens;
     std::vector<vertex_data>                 all_vertices;
@@ -139,8 +162,14 @@ private:
 class context {
 public:
 private:
-
+//TODO: implement context
 };
 
 }
+}
+
+ckotinko::lang::graph::filter operator ,(ckotinko::lang::token_type t,
+                                         const std::string& callback_id)
+{
+    return ckotinko::lang::graph::filter(t,callback_id);
 }
