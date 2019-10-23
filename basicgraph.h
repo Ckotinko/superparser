@@ -136,6 +136,8 @@ private:
 };
 
 class context {
+public:
+private:
 
 };
 
