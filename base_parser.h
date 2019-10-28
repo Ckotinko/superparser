@@ -1,175 +1,110 @@
 #pragma once
 #include <string>
-#include <vector>
-#include <list>
-#include <unordered_map>
-#include <vector>
-#include <cstdint>
-#include <ostream>
-#include <boost/serialization/split_member.hpp>
-#include "function.h"
-
+#include "graph.h"
 namespace ckotinko {
 namespace lang {
 
-enum token_type : unsigned {
-    exact_match,
-    identifier_token,
-    operator_token,
-    integer_token,
-    uinteger_token,
-    float_token,
-    string_token,
-    char_token,
-    immediate_token,//matches integer,uinteger,float,string,char
-    max_token_type
-};
-
-typedef function<void ()> callback_t;
-typedef function<bool (const std::string&)> edge_check_t;
-
-class context;
-class u16context;
-class graph {
+class base_parser {
 public:
-    class  iterator;
-    friend class iterator;
-    friend class context;
-    friend class u16context;
-private:
-    enum : unsigned { invalid_id = ~0u };
-    struct edge_data {
-        template<class Archive>
-        void save(Archive & ar, const unsigned int version)
-        {
-            ar & type;
-            ar & target_vertex;
-            ar & check_token;
-            ar & callback_id;
-        }
-        template <class Archive>
-        void load(Archive & ar, const unsigned int version)
-        {
-            ar & type;
-            ar & target_vertex;
-            ar & check_token;
-            ar & callback_id;
-            callback = edge_check_t();
-        }
-        BOOST_SERIALIZATION_SPLIT_MEMBER()
+    struct config {
+        unsigned    cxx;//0,11,14,17... don't expect full support
+        unsigned    tabsize;
+        bool        accept_numeric_suffixes;//ulf
+        unsigned    mode;//0,8,16 - encoding, 0 = auto 16bit
+    };
+    virtual void input(const char *data, size_t size, size_t &consumed) = 0;
+    virtual void finish();
 
-        unsigned     type;
-        unsigned     target_vertex = invalid_id;
-        unsigned     check_token   = invalid_id;
-        std::string  callback_id;
-        edge_check_t callback;
-    };
-    struct vertex_data {
-        template<class Archive>
-        void save(Archive & ar, const unsigned int version)
-        {
-            ar & callin;
-            ar & invalid_id;
-            ar & terminal;
-            ar & edges;
-            ar & callback_id;
-        }
-        template <class Archive>
-        void load(Archive & ar, const unsigned int version)
-        {
-            ar & callin;
-            ar & invalid_id;
-            ar & terminal;
-            ar & edges;
-            ar & callback_id;
-            callback = callback_t();
-        }
-        BOOST_SERIALIZATION_SPLIT_MEMBER()
-        unsigned    callin          = invalid_id;
-        unsigned    defaultto       = invalid_id;
-        bool        terminal        = false;
-        std::list<edge_data> edges;
-        std::string callback_id;
-        callback_t  callback;
-    };
-public:    
-    graph() {}
-    virtual callback_t getCallback(const std::string& name) = 0;
+    virtual callback_t   getCallback(const std::string& name) = 0;
     virtual edge_check_t getEdgeCallback(const std::string& name) = 0;
+    virtual void         warning(unsigned row0,
+                                 unsigned col0,
+                                 unsigned row1,
+                                 unsigned col1,
+                                 const char * msg) = 0;
+    virtual void         error(unsigned row0,
+                               unsigned col0,
+                               unsigned row1,
+                               unsigned col1,
+                               const char * msg) = 0;
 
-    struct filter {
-        filter(token_type tt, const std::string& id)
-            : type(tt), callback_id(id) {}
-        filter(token_type tt, const char* id)
-            : type(tt), callback_id(id) {}
-        token_type   type;
-        std::string callback_id;
-    };
-    class iterator {
-    public:
-        struct call { unsigned v; };
-        void      end();
-        iterator  operator *() const {return iterator(*this);}
-        iterator& operator >>(const std::string& token);
-        iterator& operator >>(const char * token);
-        iterator& operator >>(token_type tt);
-        iterator& operator >>(const filter& filter);
-        iterator& operator >>(const call& callv);
-        void      operator >>(const iterator& to);
-        call      operator()();
-        iterator& operator()(const std::string& callback);
-    private:
-        friend class graph;
-        iterator(graph& g_, unsigned v_, edge_data * e_)
-            : g(g_),e(e_),v(v_) {}
-        void completeEdge();
-        graph     &g;
-        edge_data *e;
-        unsigned   v;
-    };
+    //valid only if accessed from a registered callback!
+    token_type           token() const { return type; }
+    const std::u16string&wstring() const { return tok; }
+    unsigned             parameter() const { return tparameter; }
+    std::pair<unsigned,unsigned> token_start() const { return std::make_pair(token_start_line, token_start_col); }
+    std::pair<unsigned,unsigned> token_end() const { return std::make_pair(token_end_line, token_end_col); }
 
-    template<class Archive>
-    void save(Archive & ar, const unsigned int version)
-    {
-        ar & root_vertices;
-        ar & all_tokens;
-        ar & all_vertices;
-
-    }
-    template <class Archive>
-    void load(Archive & ar, const unsigned int version)
-    {
-        ar & root_vertices;
-        ar & all_tokens;
-        ar & all_vertices;
-        verify();
-    }
-    BOOST_SERIALIZATION_SPLIT_MEMBER()
-    iterator at(const std::string& id);
-    iterator at(const char * id);
-
-    void dump(std::ostream& os);
+    unsigned             line() const { return linecount; }
+    unsigned             column() const { return columncount; }
+    virtual ~base_parser();
+protected:
+    base_parser(const graph& g, const config& cfg);
+    void add(unsigned c1, unsigned c2);
 private:
-    bool equal(const graph& g) const {
-        return this == &g;
-    }
-    std::unordered_map<std::string,unsigned> root_vertices;
-    std::unordered_map<std::string,unsigned> all_tokens;
-    std::vector<vertex_data>                 all_vertices;
-    void verify();
-};
+    enum class state_t {
+        initial,
 
-class context {
-public:
-private:
-//TODO: implement context
+        comment_ml,
+        comment_sl,
+
+        string,
+        string_raw,
+
+        numeric_0,      //0....
+        numeric_0x,     //0x... 0b...
+        numeric_ni,     //123... 012... 0x12... 0b12...
+        numeric_n,      //123... 012... 0x12... 0b12...
+        numeric_float,  //0.12 123.45
+        numeric_f_e,    //12.34e
+        numeric_f_e_s,  //12.34e+
+        numeric_f_exp,  //12.34e+5
+        numeric_after,  //check if next symbol is not a part of numeric
+        numeric_bad,    //consume symbols which are considered invalid numeric
+        numeric_suf,    //+u +l +f +i _ud
+
+        user_defined_suffix,
+        dot,
+
+        identifier,     //
+
+        operator2,   //
+
+        bad_state,      //used to track invalid state
+    };
+
+    const graph&   g;
+    config         cfg;
+    unsigned       linecount   = 1;
+    unsigned       columncount = 1;
+
+    state_t        state = state_t::initial;
+    //the following are filled only before calling a callback!
+    token_type     type;
+    std::u16string tok;
+    std::u16string aux;
+    union {
+        struct {//string parameters
+            unsigned       tparameter;
+            unsigned       sparameter;
+            unsigned       xparameter;
+        };
+        struct {
+            unsigned       suffix;
+            bool           notafloat;
+        };
+        unsigned blob[8];
+    };
+    unsigned       token_start_line;
+    unsigned       token_end_line;
+    unsigned       token_start_col;
+    unsigned       token_end_col;
+    std::string    pending_error;
+
+    void add2(unsigned c1, unsigned c2);
+    void emitToken(unsigned endrow, unsigned endcol);
+    bool matchToken(unsigned endrow, unsigned endcol);
 };
 
 }
-}
-
-ckotinko::lang::graph::filter operator ,(ckotinko::lang::token_type t,
-                                         const std::string& callback_id)
-{
-    return ckotinko::lang::graph::filter(t,callback_id);
 }
