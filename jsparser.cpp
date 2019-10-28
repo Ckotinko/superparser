@@ -109,34 +109,4 @@ jsgraph::jsgraph(config &cfg)
             *scope >> expression() >> eos;
         }
     });
-
-
-    {
-
-
-            op2 | end
-
-        );
-        *expression >> (token_type::identifier_token, "identifier") >> op2;
-        *op2 >> (token_type::operator_token, "binary_operator") >> expression;
-        *op2 >> "." >> (token_type::identifier_token, "member") >> op2;
-        *op2 >> "(" >> expression() >> ")" >> op2;
-        *op2 >> "[" >> expression() >> "]" >> op2;
-
-        iterator subexpression = at("subexpression");
-        *expression >> "(" >> subexpression;
-
-    }
-    {
-        iterator name = at("variable_name");
-        *scope >> "let" >> name;
-        *scope >> "var" >> name;
-
-        *name >> "=" >> expression;
-        name.end();
-
-
-        *scope >> "function" >> token_type::identifier_token
-    }
-    (scope >> "var")("declare_variable")
 }
