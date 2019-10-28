@@ -16,11 +16,26 @@ public:
     virtual void finish();
     virtual void reset();
 
-    virtual bool         onToken(token_type type,
+    enum match_result{
+        unknown,
+        maybe_operator,
+        is_operator,
+        is_comment_sl,
+        is_comment_ml,
+        is_string,
+        is_rawstring,
+    };
+    virtual void         colorify(std::pair<unsigned,unsigned> from,
+                                  std::pair<unsigned,unsigned> to);
+    virtual void         onToken(token_type type,
                                  std::pair<unsigned,unsigned> from,
                                  std::pair<unsigned,unsigned> to,
                                  const std::u16string& token,
                                  unsigned detail = 0) = 0;
+    virtual match_result matchToken(std::pair<unsigned,unsigned> from,
+                                 std::pair<unsigned,unsigned> to,
+                                 const std::u16string& token,
+                                 std::u16string& se) = 0;
     virtual void         warning(std::pair<unsigned,unsigned> from,
                                  std::pair<unsigned,unsigned> to,
                                  const std::string& msg) = 0;
@@ -28,9 +43,6 @@ public:
                                std::pair<unsigned,unsigned> to,
                                const std::string& msg) = 0;
 
-    //valid only if accessed from a registered callback!
-    const std::u16string&wstring() const { return tok; }
-    unsigned             parameter() const { return tparameter; }
     virtual ~base_parser();
 protected:
     base_parser(const graph& g, const config& cfg);

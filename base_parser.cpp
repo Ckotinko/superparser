@@ -122,7 +122,7 @@ void base_parser::add(unsigned c1, unsigned c2)
         }
         break;}
     case state_t::string: {
-        assert(aux.empty() == false);
+        assert(!aux.empty());
         if (nv)
             throw std::runtime_error("invalid character");
 
@@ -153,7 +153,7 @@ void base_parser::add(unsigned c1, unsigned c2)
                 tparameter = 0;
                 break;
             default:
-                if (c1 != sparameter) {
+                if (c1 != aux[0]) {
                     std::u16string m; m.append(1, c1);
                     if (c2) m.append(1, c2);
                     warning(std::make_pair(linecount, columncount-1),
@@ -230,7 +230,7 @@ void base_parser::add(unsigned c1, unsigned c2)
             break;}
         case 0:just_add_characters:{
             tparameter = 0;
-            if (c1 == sparameter) {
+            if (c1 == aux[0]) {
                 emitToken(nl,nc);
                 break;
             }
@@ -452,6 +452,18 @@ void base_parser::add(unsigned c1, unsigned c2)
             add2(c1,c2);
             break;
         }
+        //u16"" or R" support
+        if (c1 == '\"' || c1 == '\'') {
+            add2(c1, 0);
+            state = state_t::operator2;
+            if (matchToken(nl,nc))
+                break;
+
+            pending_error = "invalid string";
+            state = state_t::error_state;
+            emitToken(nl, nc);
+            break;
+        }
         emitToken(nl,nc);
         goto __initial;}
     case state_t::dot:{
@@ -499,8 +511,7 @@ void base_parser::add(unsigned c1, unsigned c2)
         case '[':case ']':case '{':case '}':case '@':case '<':case '>':
         case ',':case '|':case '\'':case '\"':case '/':
             tok.push_back(c1);
-            if (!matchToken(nl,nc))
-                state = state_t::operator2;
+            matchToken(nl,nc);
             break;
         case '.'://tricky part: can be numeric or operator!
             //thanks to assholes who made it possible in C
@@ -532,8 +543,7 @@ void base_parser::add(unsigned c1, unsigned c2)
             }
             if (cat & PUNCT) {
                 tok.push_back(c1);
-                if (!matchToken(nl,nc))
-                    state = state_t::operator2;
+                matchToken(nl,nc);
                 break;
             }
             pending_error = "invalid character";
@@ -544,6 +554,8 @@ void base_parser::add(unsigned c1, unsigned c2)
     default:
         throw std::logic_error("invalid state " LINE_STRING);
     }
+    colorify(std::make_pair(linecount, columncount),
+             std::make_pair(nl, nc));
     linecount = nl;
     columncount = nc;
 }
@@ -610,13 +622,44 @@ void base_parser::emitToken(unsigned endrow, unsigned endcol)
     //columncount = token_end_col;
     state = state_t::initial;
 }
+//return true only if token was consumed by backend
 bool base_parser::matchToken(unsigned endrow, unsigned endcol)
 {
+    match_result match = matchToken(
+                std::make_pair(linecount, columncount),
+                std::make_pair(endrow, endcol),
+                tok, aux);
+    switch(match) {
+    case maybe_operator:
+        state = state_t::operator2;
+        return false;
+    case is_operator:
+        state = state_t::initial;
+        break;
+    case is_comment_sl:
+        state = state_t::comment_sl;
+        break;
+    case is_comment_ml:
+        assert(!aux.empty());
+        state = state_t::comment_ml;
+        break;
+    case is_string:
+        assert(!aux.empty());
+        state = state_t::string;
+        break;
+    case is_rawstring:
+        assert(!aux.empty());
+        state = state_t::string_raw;
+        break;
+    default:
+        return false;
+    }
+    return true;
+}
 
-    bool match = onToken(token_type::operator_token,
-                         std::make_pair(linecount, columncount),
-                         std::make_pair(endrow, endcol),
-                         tok);
-    if (match) state = state_t::initial;
-    return match;
+void base_parser::colorify(std::pair<unsigned,unsigned> from,
+                           std::pair<unsigned,unsigned> to)
+{
+    (void)from;
+    (void)to;
 }
