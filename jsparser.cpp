@@ -7,21 +7,55 @@ static graph js;
 jsgraph::jsgraph(config &cfg)
     : base_parser(cfg)
 {
-    std::once_flag once;
+    static std::once_flag once;
+    //собственно, почти весь синтаксис "обычного" JS укладывается в пару страниц:
     std::call_once(once, []() {
         //dont implement this: will handle as special case
         //*expression >> "//" >> (token_type::comment_token) >> 0;
         //*expression >> "/*" >> (token_type::comment_token) >> "*/";
 
         graph::iterator expression = js.at("expression");
+        graph::iterator scope = js.at("scope");
+        graph::iterator eos = js.at(";");
+        graph::iterator func = js.at("func");
+        eos >> ";" >> 0;
+        {
+            graph::iterator arg= (*func >> "(");
+            graph::iterator body = (*arg >> ")");
+            *body >> "{" >> scope() >> "}" >> 0;
+            *arg >> (token_type::identifier_token, "arg_name") >> ")" >> body;
+            *arg >> (token_type::identifier_token, "arg_name") >> "," >> arg;
+        }
         {
             graph::iterator op2 = js.at("op2");
             //-10, !(a+b)
             *expression >> (token_type::operator_token, "prefix_operator") >> expression;
+
+            //function
+            *expression >> "function" >> func() >> 0;
+
             //10, 1.0
             *expression >> token_type::float_token >> op2;
             *expression >> token_type::integer_token >> op2;
-            *expression >> token_type::identifier_token >> op2;
+            *expression >> (token_type::identifier_token, "ident") >> op2;
+
+
+            //objects
+            graph::iterator oelt = js.at("objel");
+            graph::iterator obj  = (*expression >> "{");
+            *obj >> (token_type::integer_token, "object_member") >> oelt;
+            *obj >> (token_type::identifier_token, "object_member") >> oelt;
+            *obj >> "}" >> 0;
+            *oelt >> ":" >> expression() >> "}" >> 0;
+            *oelt >> ":" >> expression() >> "," >> obj;
+
+            //arrays
+            graph::iterator aelt= js.at("arrel");
+            graph::iterator arr = (*expression >> "[") >> aelt;
+            *arr >> expression() >> aelt;
+            *arr >> "]" >> 0;
+            *aelt >> "," >> arr;
+            *aelt >> "]" >> 0;
 
             //"blah", 'blah', `blah`
             *expression >> "\"" >> (token_type::string_token) >> "\"" >> op2;
@@ -30,7 +64,7 @@ jsgraph::jsgraph(config &cfg)
             *expression >> "`"  >> (token_type::string_token) >> "`"  >> op2;
 
             // a
-            *expression >> token_type::identifier_token
+            *expression >> token_type::identifier_token >> op2;
 
             // (a+b)
             *expression >> "(" >> expression() >> ")" >> op2;
@@ -49,11 +83,6 @@ jsgraph::jsgraph(config &cfg)
         }
         graph::iterator scope = js.at("scope");
         {
-            //statement may end with ; or may omit ; - warning will be shown
-            graph::iterator eos = js.at(";");
-            eos >> ";" >> 0;
-            eos >> 0;
-
             //function f(arg1,arg2) { };
             graph::iterator as = (*scope >> "function" >> (token_type::identifier_token, "function_name")
                    >> "(");
@@ -61,6 +90,8 @@ jsgraph::jsgraph(config &cfg)
             *fargs >> (token_type::identifier_token, "arg_name") >> ")" >>fendargs;
             *fargs >> (token_type::identifier_token, "arg_name") >> "," >>fargs;
             *fendargs >> "{" >> scope() >> "}" >> eos;
+
+
 
             //var x;
             //var x,y;
@@ -74,13 +105,9 @@ jsgraph::jsgraph(config &cfg)
             *val >> "=" >> expression() >> val;
             *val >> eos;
 
-
-
-
+            //(a.b.c = function() {...})(1,2);
+            *scope >> expression() >> eos;
         }
-
-        graph::iterator root = js.at("root");
-
     });
 
 
