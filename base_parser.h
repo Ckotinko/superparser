@@ -16,21 +16,20 @@ public:
     virtual void finish();
 
     virtual bool         onToken(token_type type,
+                                 std::pair<unsigned,unsigned> from,
+                                 std::pair<unsigned,unsigned> to,
                                  const std::u16string& token,
                                  unsigned detail = 0) = 0;
     virtual void         warning(std::pair<unsigned,unsigned> from,
                                  std::pair<unsigned,unsigned> to,
                                  const std::string& msg) = 0;
-    virtual void         error(const std::string& msg) = 0;
+    virtual void         error(std::pair<unsigned,unsigned> from,
+                               std::pair<unsigned,unsigned> to,
+                               const std::string& msg) = 0;
 
     //valid only if accessed from a registered callback!
     const std::u16string&wstring() const { return tok; }
     unsigned             parameter() const { return tparameter; }
-    std::pair<unsigned,unsigned> token_start() const { return std::make_pair(token_start_line, token_start_col); }
-    std::pair<unsigned,unsigned> token_end() const { return std::make_pair(token_end_line, token_end_col); }
-
-    unsigned             line() const { return linecount; }
-    unsigned             column() const { return columncount; }
     virtual ~base_parser();
 protected:
     base_parser(const graph& g, const config& cfg);
@@ -91,10 +90,6 @@ private:
         };
         unsigned blob[8];
     };
-    unsigned       token_start_line;
-    unsigned       token_end_line;
-    unsigned       token_start_col;
-    unsigned       token_end_col;
     std::string    pending_error;
 
     void add2(unsigned c1, unsigned c2);

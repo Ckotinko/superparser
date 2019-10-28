@@ -487,8 +487,6 @@ void base_parser::add(unsigned c1, unsigned c2)
         switch(c1) {
         case ' ':case '\t':case '\r':case '\n':
             //white space
-            token_start_line = nl;
-            token_start_col = nc;
             break;
         case '~':case '!':case '%':case '^':case ':':case '&':case ';':
         case '?':case '*':case '(':case ')':case '-':case '+':case '=':
@@ -540,6 +538,8 @@ void base_parser::add(unsigned c1, unsigned c2)
     default:
         throw std::logic_error("invalid state " LINE_STRING);
     }
+    linecount = nl;
+    columncount = nc;
 }
 
 void base_parser::add2(unsigned c1, unsigned c2)
@@ -550,51 +550,67 @@ void base_parser::add2(unsigned c1, unsigned c2)
 
 void base_parser::emitToken(unsigned endrow, unsigned endcol)
 {
-    token_end_line = endrow;
-    token_end_col  = endcol;
     switch(state) {
     case state_t::comment_sl:
     case state_t::comment_ml:
-        onToken(token_type::comment_token, tok);
+        onToken(token_type::comment_token,
+                std::make_pair(linecount, columncount),
+                std::make_pair(endrow, endcol),
+                tok);
         break;
     case state_t::string_raw:
     case state_t::string:
-        onToken(token_type::string_token, tok);
+        onToken(token_type::string_token,
+                std::make_pair(linecount, columncount),
+                std::make_pair(endrow, endcol),
+                tok);
         break;
     case state_t::numeric_after:
         if (isfloat) {
-            onToken(token_type::float_token, tok, suffix);
+            onToken(token_type::float_token,
+                    std::make_pair(linecount, columncount),
+                    std::make_pair(endrow, endcol),
+                    tok, suffix);
         } else {
-            onToken(token_type::integer_token, tok, suffix);
+            onToken(token_type::integer_token,
+                    std::make_pair(linecount, columncount),
+                    std::make_pair(endrow, endcol),
+                    tok, suffix);
         }
         break;
     case state_t::identifier:
-        onToken(token_type::identifier_token, tok);
+        onToken(token_type::identifier_token,
+                std::make_pair(linecount, columncount),
+                std::make_pair(endrow, endcol),
+                tok);
         break;
     case state_t::user_defined_suffix:
-        onToken(token_type::user_suffix_token, tok);
+        onToken(token_type::user_suffix_token,
+                std::make_pair(linecount, columncount),
+                std::make_pair(endrow, endcol),
+                tok);
         break;
     case state_t::numeric_bad:
     case state_t::error_state:
         //handle bad token
-        error(pending_error);
+        error(std::make_pair(linecount, columncount),
+              std::make_pair(endrow, endcol),
+              pending_error);
         break;
     default:
         throw std::logic_error("invalid state " LINE_STRING);
     }
-    token_start_line = token_end_line;
-    token_start_col  = token_end_col;
+    //linecount   = token_end_line;
+    //columncount = token_end_col;
     state = state_t::initial;
 }
 bool base_parser::matchToken(unsigned endrow, unsigned endcol)
 {
-    token_end_line = endrow;
-    token_end_col  = endcol;
-    bool match = onToken(token_type::operator_token, tok);
-    if (match) {
-        token_start_line = token_end_line;
-        token_start_col  = token_end_col;
-        state = state_t::initial;
-    }
+
+    bool match = onToken(token_type::operator_token,
+                         std::make_pair(linecount, columncount),
+                         std::make_pair(endrow, endcol),
+                         tok);
+    if (match) state = state_t::initial;
     return match;
 }
