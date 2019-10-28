@@ -22,6 +22,12 @@ base_parser::base_parser(const graph &g_, const config &cfg_)
 base_parser::~base_parser()
 {
 }
+void base_parser::reset()
+{
+    state = state_t::initial;
+    linecount = 1;
+    columncount = 1;
+}
 
 enum { IDENT = 1, NUMERIC = 2, PUNCT = 4, SPACE = 8 };
 static unsigned get_unichar_category(unsigned c1, unsigned c2) {

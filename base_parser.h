@@ -14,6 +14,7 @@ public:
     };
     virtual void input(const char *data, size_t size, size_t &consumed) = 0;
     virtual void finish();
+    virtual void reset();
 
     virtual bool         onToken(token_type type,
                                  std::pair<unsigned,unsigned> from,
@@ -74,7 +75,6 @@ private:
 
     state_t        state = state_t::initial;
     //the following are filled only before calling a callback!
-    token_type     type;
     std::u16string tok;
     std::u16string aux;
     union {
