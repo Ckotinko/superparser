@@ -150,8 +150,8 @@ void base_parser::add(unsigned c1, unsigned c2)
                 if (c1 != sparameter) {
                     std::u16string m; m.append(1, c1);
                     if (c2) m.append(1, c2);
-                    warning(linecount, columncount-1,
-                            nl, nc,
+                    warning(std::make_pair(linecount, columncount-1),
+                            std::make_pair(nl, nc),
                             "unknown escape");
                 }
                 add(c1,c2);
@@ -183,8 +183,8 @@ void base_parser::add(unsigned c1, unsigned c2)
         case 'x':case 'y':{
             xparameter = tohex(xparameter, c1);
             if (xparameter == ~0u) {
-                warning(linecount, columncount-(tparameter-'x'+2),
-                        nl, nc,
+                warning(std::make_pair(linecount, columncount-(tparameter-'x'+2)),
+                        std::make_pair(nl, nc),
                         "invalid escape");
                 goto just_add_characters;
             }
@@ -196,8 +196,8 @@ void base_parser::add(unsigned c1, unsigned c2)
         case 200:case 201:case 202:case 203:{
             xparameter = tohex(xparameter, c1);
             if (xparameter == ~0u) {
-                warning(linecount, columncount-(tparameter-202),
-                        nl, nc,
+                warning(std::make_pair(linecount, columncount-(tparameter-202)),
+                        std::make_pair(nl, nc),
                         "invalid escape");
                 goto just_add_characters;
             }
@@ -216,8 +216,8 @@ void base_parser::add(unsigned c1, unsigned c2)
                 add2(c1 - 'a' + 1, 0);
                 break;
             default:
-                warning(linecount, columncount-2,
-                        nl, nc,
+                warning(std::make_pair(linecount, columncount-2),
+                        std::make_pair(nl, nc),
                         "invalid escape");
                 goto just_add_characters;
             }

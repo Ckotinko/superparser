@@ -18,12 +18,9 @@ public:
     virtual bool         onToken(token_type type,
                                  const std::u16string& token,
                                  unsigned detail = 0) = 0;
-
-    virtual void         warning(unsigned row0,
-                                 unsigned col0,
-                                 unsigned row1,
-                                 unsigned col1,
-                                 const char * msg) = 0;
+    virtual void         warning(std::pair<unsigned,unsigned> from,
+                                 std::pair<unsigned,unsigned> to,
+                                 const std::string& msg) = 0;
     virtual void         error(const std::string& msg) = 0;
 
     //valid only if accessed from a registered callback!
