@@ -485,7 +485,7 @@ void base_parser::add(unsigned c1, unsigned c2)
         case '~':case '!':case '%':case '^':case ':':case '&':case ';':
         case '?':case '*':case '(':case ')':case '-':case '+':case '=':
         case '[':case ']':case '{':case '}':case '@':case '<':case '>':
-        case ',':case '|':case '\'':case '\"':case '/':case '.':
+        case ',':case '|':case '\'':case '\"':case '/':case '.':case '`':
             tok.push_back(c1);
             matchToken(nl,nc);
             break;
@@ -509,7 +509,7 @@ void base_parser::add(unsigned c1, unsigned c2)
         case '~':case '!':case '%':case '^':case ':':case '&':case ';':
         case '?':case '*':case '(':case ')':case '-':case '+':case '=':
         case '[':case ']':case '{':case '}':case '@':case '<':case '>':
-        case ',':case '|':case '\'':case '\"':case '/':
+        case ',':case '|':case '\'':case '\"':case '/':case '`':
             tok.push_back(c1);
             matchToken(nl,nc);
             break;
