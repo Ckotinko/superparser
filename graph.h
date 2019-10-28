@@ -20,6 +20,7 @@ enum token_type : unsigned {
     float_token,
     string_token,
     comment_token,
+    user_suffix_token,
     max_token_type
 };
 

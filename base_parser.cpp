@@ -295,6 +295,7 @@ void base_parser::add(unsigned c1, unsigned c2)
             state = state_t::numeric_float;
             break;
         case 'e':case 'E':
+            isfloat = true;
             add2(c1,c2);
             state = state_t::numeric_f_e;
             break;
@@ -304,6 +305,7 @@ void base_parser::add(unsigned c1, unsigned c2)
         }
         break;}
     case state_t::numeric_float: {
+        isfloat = true;
         switch(c1) {
         case '0' ... '9':
             add2(c1,c2);
@@ -378,6 +380,7 @@ void base_parser::add(unsigned c1, unsigned c2)
                 state = state_t::numeric_bad;
                 goto __numeric_bad;
             }
+            isfloat = true;
             goto __sfx;
             //fall-through
         case 'f':case 'F':
@@ -470,7 +473,7 @@ void base_parser::add(unsigned c1, unsigned c2)
             break;
         default:
             pending_error = "invalid operator";
-            state = state_t::bad_state;
+            state = state_t::error_state;
             emitToken(nl,nc);
         }
         break;}
@@ -530,7 +533,7 @@ void base_parser::add(unsigned c1, unsigned c2)
                 break;
             }
             pending_error = "invalid character";
-            state = state_t::bad_state;
+            state = state_t::error_state;
             emitToken(nl,nc);//will reset state back
         }
         break;}
@@ -552,49 +555,46 @@ void base_parser::emitToken(unsigned endrow, unsigned endcol)
     switch(state) {
     case state_t::comment_sl:
     case state_t::comment_ml:
-        type = token_type::comment_token;
+        onToken(token_type::comment_token, tok);
         break;
     case state_t::string_raw:
     case state_t::string:
-        type = token_type::string_token;
+        onToken(token_type::string_token, tok);
         break;
-    case state_t::numeric_after:{
-
-        break;}
+    case state_t::numeric_after:
+        if (isfloat) {
+            onToken(token_type::float_token, tok, suffix);
+        } else {
+            onToken(token_type::integer_token, tok, suffix);
+        }
+        break;
     case state_t::identifier:
-        type = token_type::identifier_token;
-
+        onToken(token_type::identifier_token, tok);
+        break;
     case state_t::user_defined_suffix:
+        onToken(token_type::user_suffix_token, tok);
+        break;
     case state_t::numeric_bad:
-    case state_t::bad_state:
+    case state_t::error_state:
         //handle bad token
-        error(token_start_line, token_start_col,
-              token_end_line, token_end_col,
-              pending_error.c_str());
+        error(pending_error);
         break;
     default:
         throw std::logic_error("invalid state " LINE_STRING);
     }
-
+    token_start_line = token_end_line;
+    token_start_col  = token_end_col;
     state = state_t::initial;
-
 }
 bool base_parser::matchToken(unsigned endrow, unsigned endcol)
 {
     token_end_line = endrow;
     token_end_col  = endcol;
-    switch(state) {
-    case state_t::comment_sl:
-    case state_t::comment_ml:
-    case state_t::string_raw:
-    case state_t::string:
-    case state_t::numeric_after:
-    case state_t::numeric_bad:
-    case state_t::identifier:
-    case state_t::user_defined_suffix:
-    case state_t::bad_state:
-    default:
-        throw std::logic_error("invalid state " LINE_STRING);
+    bool match = onToken(token_type::operator_token, tok);
+    if (match) {
+        token_start_line = token_end_line;
+        token_start_col  = token_end_col;
+        state = state_t::initial;
     }
-
+    return match;
 }

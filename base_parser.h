@@ -15,21 +15,18 @@ public:
     virtual void input(const char *data, size_t size, size_t &consumed) = 0;
     virtual void finish();
 
-    virtual callback_t   getCallback(const std::string& name) = 0;
-    virtual edge_check_t getEdgeCallback(const std::string& name) = 0;
+    virtual bool         onToken(token_type type,
+                                 const std::u16string& token,
+                                 unsigned detail = 0) = 0;
+
     virtual void         warning(unsigned row0,
                                  unsigned col0,
                                  unsigned row1,
                                  unsigned col1,
                                  const char * msg) = 0;
-    virtual void         error(unsigned row0,
-                               unsigned col0,
-                               unsigned row1,
-                               unsigned col1,
-                               const char * msg) = 0;
+    virtual void         error(const std::string& msg) = 0;
 
     //valid only if accessed from a registered callback!
-    token_type           token() const { return type; }
     const std::u16string&wstring() const { return tok; }
     unsigned             parameter() const { return tparameter; }
     std::pair<unsigned,unsigned> token_start() const { return std::make_pair(token_start_line, token_start_col); }
@@ -60,17 +57,18 @@ private:
         numeric_f_e_s,  //12.34e+
         numeric_f_exp,  //12.34e+5
         numeric_after,  //check if next symbol is not a part of numeric
-        numeric_bad,    //consume symbols which are considered invalid numeric
         numeric_suf,    //+u +l +f +i _ud
 
-        user_defined_suffix,
-        dot,
+        numeric_bad,    //consume symbols which are considered invalid numeric
 
-        identifier,     //
+        user_defined_suffix,//c++11 feature(can be disabled)
+        dot,            //decide if this is a float or an operator
 
-        operator2,   //
+        identifier,     //some identifier, but can be operator:it's up to client to decide
 
-        bad_state,      //used to track invalid state
+        operator2,      //operator consisting of more than one character
+
+        error_state,    //used to track invalid state
     };
 
     const graph&   g;
@@ -92,6 +90,7 @@ private:
         struct {
             unsigned       suffix;
             bool           notafloat;
+            bool           isfloat;
         };
         unsigned blob[8];
     };
